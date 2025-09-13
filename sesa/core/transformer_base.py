@@ -1,24 +1,35 @@
 # sesa/core/transformer_base.py
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
-from .storage_base import Batch, Record
+
+from abc import ABC, abstractmethod
+from typing import List, Optional
+
 from .base_stage import Stage
+from .storage_base import Batch, Record
 
-class Transformer(Stage):
+
+class Transformer(Stage, ABC):
     """
-    Transforms records. Prefer stateless logic.
-    If stateful (e.g., HTTP clients), create per-thread resources in open().
-    Return None to drop a record.
+    Abstract base for all transformers.
+    Implement at least map_record(); optionally override map_batch() for batch-level work.
+    Prefer stateless logic; if stateful (e.g., HTTP clients), create them in open().
+    Return None from map_record() to drop a record.
     """
 
+    @abstractmethod
     def map_record(self, rec: Record) -> Optional[Record]:
-        """Default per-record transform: identity."""
-        return rec
+        """
+        Transform one record.
+        Return:
+          - a dict (kept) or
+          - None (dropped)
+        """
+        ...
 
     def map_batch(self, batch: Batch) -> Batch:
         """
-        Default batch transform applies map_record() and drops None results.
-        Override for vectorized operations or API fanout.
+        Default batch transform: apply map_record() to each item and drop Nones.
+        Override for vectorized ops (e.g., dedup across batch, one HTTP call per batch).
         """
         out: List[Record] = []
         for rec in batch:
@@ -26,5 +37,6 @@ class Transformer(Stage):
             if mapped is not None:
                 out.append(mapped)
         return out
+
 
 __all__ = ["Transformer"]
